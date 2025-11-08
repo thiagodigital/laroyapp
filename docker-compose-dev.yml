@@ -1,0 +1,106 @@
+services:
+  backend:
+    build:
+      context: ./backend
+      dockerfile: ./docker/Dockerfile
+    container_name: backend_laroyapp
+    working_dir: /var/www
+    volumes:
+      - ./backend:/var/www
+    networks:
+      - talent_network_laroyapp
+    depends_on:
+      - mariadb
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: ./docker/Dockerfile
+    container_name: frontend_laroyapp
+    working_dir: /app
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    command: npm run dev -- --host 0.0.0.0
+    networks:
+      - talent_network_laroyapp
+    depends_on:
+      - backend
+
+  nginx:
+    image: nginx:latest
+    container_name: nginx_laroyapp
+    ports:
+      - "${NGINX_PORT:-80}:80"
+      - "${NGINX_PORT_SEG:-443}:443"
+    volumes:
+      - ./backend:/var/www
+      - ./docker/nginx/certs:/etc/certs
+      - ./docker/nginx/conf.d:/etc/nginx/conf.d
+      - ./docker/nginx/html:/var/www/certbot
+    depends_on:
+      - backend
+      - frontend
+    networks:
+      - talent_network_laroyapp
+
+  mariadb:
+    image: "mariadb:10.7"
+    container_name: database_laroyapp
+    ports:
+      - "${DB_PORT:-3306}:3306"
+    environment:
+      MARIADB_ROOT_PASSWORD: "${DB_PASSWORD}"
+      MARIADB_ROOT_HOST: "%"
+      MARIADB_DATABASE: "${DB_DATABASE}"
+      MARIADB_USER: "${DB_USERNAME}"
+      MARIADB_PASSWORD: "${DB_PASSWORD}"
+      MARIADB_ALLOW_EMPTY_PASSWORD: "yes"
+    volumes:
+      - "mariadb-data-novo-app:/var/lib/mysql"
+    networks:
+      - talent_network_laroyapp
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-p${DB_PASSWORD}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+  queue:
+    build:
+      context: ./backend
+      dockerfile: ./docker/Dockerfile
+    container_name: queue_laroyapp
+    working_dir: /var/www
+    command: php artisan queue:work --verbose --tries=3 --timeout=90
+    volumes:
+      - ./backend:/var/www
+    depends_on:
+      - mariadb
+      - backend
+    networks:
+      - talent_network_laroyapp
+    restart: unless-stopped
+  reverb:
+    build:
+      context: ./backend
+      dockerfile: ./docker/Dockerfile
+    container_name: reverb_laroyapp
+    working_dir: /var/www
+    command: php artisan reverb:start --host=0.0.0.0 --port=8080
+    volumes:
+      - ./backend:/var/www
+    depends_on:
+      - backend
+    networks:
+      - talent_network_laroyapp
+    ports:
+      - "8080:8080"
+
+networks:
+  talent_network_laroyapp:
+    driver: bridge
+
+volumes:
+  mariadb-data-novo-app:
+    driver: local
+    name: mariadb-data-novo-app
