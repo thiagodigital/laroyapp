@@ -33,6 +33,11 @@ RUN apt-get update && apt-get install -y \
 # RUN pecl install redis && docker-php-ext-enable redis
 
 # -----------------------------
+# 2.1. Adicionar config customizada do PHP para Uploads
+# -----------------------------
+COPY ./docker/php.ini /usr/local/etc/php/conf.d/uploads.ini
+
+# -----------------------------
 # 3. Instalar Composer
 # -----------------------------
 COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
@@ -56,6 +61,11 @@ RUN composer install
 RUN mkdir -p /var/www/storage /var/www/bootstrap/cache && \
     chown -R www-data:www-data /var/www && \
     chmod -R 775 /var/www/storage /var/www/bootstrap/cache
+
+# -----------------------------
+# 5.1. Criar o link simbólico do Storage
+# -----------------------------
+RUN php artisan storage:link
 
 # -----------------------------
 # 6. Expor porta FPM
